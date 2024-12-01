@@ -1,39 +1,43 @@
 package engine
 
-import "github.com/go-gl/glfw/v3.3/glfw"
+import (
+	"cliabh/engine/render"
+	"github.com/go-gl/glfw/v3.3/glfw"
+	"log"
+)
 
 type Pane interface {
 	Component
-	AddChild(child Pane)
-	Draw()
-	Update(deltaTime float64)
+	AddChild(child Component)
+	Draw(ctx *render.RenderingContext)
+	InitializeAll()
 }
 
 type BasePane struct {
 	*BaseComponent
-	Children []Pane
+	Children []Component
 }
 
 func NewBasePane(x, y, width, height float32) *BasePane {
 	return &BasePane{
 		BaseComponent: NewBaseComponent(x, y, width, height),
-		Children:      []Pane{},
+		Children:      []Component{},
 	}
 }
 
-func (bp *BasePane) AddChild(child Pane) {
-	bp.Children = append(bp.Children, child)
-}
-
-func (bp *BasePane) Draw() {
-	for _, child := range bp.Children {
-		child.Draw()
+func (bp *BasePane) AddChild(child Component) {
+	switch child.(type) {
+	case *Window:
+		log.Fatalln("Window 는 Pane 에 추가될 수 없습니다.")
+		return
+	default:
+		bp.Children = append(bp.Children, child)
 	}
 }
 
-func (bp *BasePane) Update(deltaTime float64) {
+func (bp *BasePane) Draw(ctx *render.RenderingContext) {
 	for _, child := range bp.Children {
-		child.Update(deltaTime)
+		child.Draw(ctx)
 	}
 }
 
@@ -67,10 +71,10 @@ type GlassPane struct {
 	Controller EventController
 }
 
-func NewGlassPane(x, y, width, height float32) *GlassPane {
+func NewGlassPane(x, y, width, height float32, controller EventController) *GlassPane {
 	return &GlassPane{
 		BasePane:   NewBasePane(x, y, width, height),
-		Controller: NewEventController(),
+		Controller: controller,
 	}
 }
 
@@ -80,4 +84,17 @@ func (gp *GlassPane) HandleKeyEvent(event glfw.Key) {
 
 func (gp *GlassPane) HandleMouseEvent(button glfw.MouseButton, action glfw.Action, xpos, ypos float64) {
 	gp.Controller.HandleMouseEvent(button, action, xpos, ypos)
+}
+
+func (bp *BasePane) InitializeAll() {
+	for _, component := range bp.Children {
+		if paneParent, ok := component.(Pane); ok {
+			paneParent.InitializeAll()
+		} else if initializer, ok := component.(OptionalInitializer); ok {
+			err := initializer.Initialize()
+			if err != nil {
+				log.Fatalf("Initialize Failed. %v", err)
+			}
+		}
+	}
 }

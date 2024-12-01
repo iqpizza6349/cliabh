@@ -1,6 +1,8 @@
 package engine
 
 import (
+	"cliabh/engine/render"
+	"fmt"
 	"github.com/go-gl/gl/v4.1-core/gl"
 	"github.com/go-gl/glfw/v3.3/glfw"
 	"log"
@@ -10,12 +12,12 @@ import (
 // 하나의 창을 만들고 렌더링하는 주체이다.
 type Window struct {
 	*Container
-	Window   *glfw.Window
-	RootPane *BasePane
+	Window *glfw.Window
 }
 
 func NewWindow(title string, width, height int) *Window {
 	if err := glfw.Init(); err != nil {
+		glfw.Terminate()
 		log.Fatalln("Failed to initialized glfw: ", err)
 	}
 
@@ -37,19 +39,26 @@ func NewWindow(title string, width, height int) *Window {
 		log.Fatalln("Failed to initialized gl: ", err)
 	}
 
-	rootPane := NewBasePane(0, 0, float32(width), float32(height))
+	fmt.Println("OpenGL Version:", gl.GoStr(gl.GetString(gl.VERSION)))
+	InitializeContext()
+
+	viewPortWidth, viewPortHeight := win.GetFramebufferSize()
+	gl.Viewport(0, 0, int32(viewPortWidth), int32(viewPortHeight))
+
+	gl.ClearColor(1.0, 1.0, 1.0, 1.0)
 
 	return &Window{
 		Container: NewContainer(0, 0, float32(width), float32(height)),
 		Window:    win,
-		RootPane:  rootPane,
 	}
 }
 
 func (w *Window) MainLoop() {
+	w.Container.InitializeAll()
+	ctx := render.NewRenderingContext(w.Width, w.Height)
+
 	for !w.Window.ShouldClose() {
-		w.Update(1.0 / 60.0) // deltaTime 을 임의로 1/60 초로 지정
-		w.Draw()
+		w.Draw(ctx)
 
 		w.Window.SwapBuffers()
 		glfw.PollEvents()
@@ -57,12 +66,7 @@ func (w *Window) MainLoop() {
 	glfw.Terminate()
 }
 
-func (w *Window) Draw() {
+func (w *Window) Draw(ctx *render.RenderingContext) {
 	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
-	w.RootPane.Draw()
-}
-
-// Update 는 윈도우와 그 안의 모든 컴포넌트의 상태를 업데이트합니다.
-func (w *Window) Update(deltaTime float64) {
-	w.RootPane.Update(deltaTime)
+	w.Container.Draw(ctx)
 }
